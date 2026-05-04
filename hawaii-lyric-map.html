@@ -1,0 +1,1846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>De Cádiz a Hanalei — An Interactive Lyric Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap');
+
+  :root {
+    /* Paper & ink (light cream theme for content) */
+    --bg-paper: #f3ead6;
+    --bg-paper-light: #faf3e3;
+    --ink-primary: #1f1812;
+    --ink-secondary: #6e5a44;
+    --hairline: #c5b48f;
+    --hairline-strong: #9b8767;
+
+    /* Header chrome (dark) */
+    --header-bg: #0a0a0a;
+    --header-text: #f0e8dc;
+    --header-text-dim: rgba(240, 232, 220, 0.6);
+    --header-hairline: rgba(255, 255, 255, 0.15);
+
+    /* Single accent (cool navy) */
+    --accent: #1c2a44;
+
+    /* Muted Part I (Spanish ochre) / Part II (Pacific slate) */
+    --part1: #9b6a3f;
+    --part1-dim: rgba(155, 106, 63, 0.55);
+    --part2: #4a6b7a;
+    --part2-dim: rgba(74, 107, 122, 0.6);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Times New Roman', Times, serif;
+    background: #0a0a0a;
+    color: var(--ink-primary);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* --- Header (cream paper banner) --- */
+  #header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    background: linear-gradient(180deg, #ede0c4 0%, #f3ead6 55%, #faf3e3 100%);
+    border-bottom: 1px solid var(--hairline-strong);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+    padding: 18px 30px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    pointer-events: none;
+  }
+  #header > * { pointer-events: auto; }
+  .header-top {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 16px;
+  }
+
+  #title-area {
+    cursor: pointer;
+    transition: opacity 0.3s ease;
+    grid-column: 2;
+    justify-self: center;
+  }
+  #title-area:hover { opacity: 0.7; }
+  #title-area h1 {
+    font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+    font-size: 32px;
+    font-weight: 500;
+    color: var(--ink-primary);
+    letter-spacing: 0.4px;
+    text-align: center;
+  }
+
+  /* --- Hamburger (just three lines, no frame, dark on cream) --- */
+  .menu-wrap {
+    grid-column: 1;
+    justify-self: start;
+    position: relative;
+  }
+  .menu-toggle {
+    width: 30px;
+    height: 22px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: stretch;
+    transition: opacity 0.25s ease;
+  }
+  .menu-toggle:hover { opacity: 0.6; }
+  .menu-toggle span {
+    display: block;
+    height: 1.5px;
+    background: var(--ink-primary);
+    border-radius: 0;
+    transition: transform 0.3s ease, opacity 0.2s ease;
+    transform-origin: center;
+  }
+  .menu-toggle.open span:nth-child(1) { transform: translateY(10px) rotate(45deg); }
+  .menu-toggle.open span:nth-child(2) { opacity: 0; }
+  .menu-toggle.open span:nth-child(3) { transform: translateY(-10px) rotate(-45deg); }
+
+  .menu-panel {
+    position: absolute;
+    top: calc(100% + 18px);
+    left: 0;
+    z-index: 1050;
+    background: var(--bg-paper-light);
+    border: 1px solid var(--hairline-strong);
+    border-radius: 0;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    padding: 6px;
+    min-width: 240px;
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .menu-panel.open {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  .menu-item {
+    display: block;
+    width: 100%;
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    color: var(--ink-secondary);
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 0;
+    letter-spacing: 0.4px;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .menu-item:hover {
+    background: rgba(31, 24, 18, 0.06);
+    color: var(--ink-primary);
+  }
+  .menu-divider {
+    height: 1px;
+    background: var(--hairline);
+    margin: 4px 0;
+  }
+
+  /* --- Journey Progress Bar (minimalist on cream header) --- */
+  #progress-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    pointer-events: auto;
+    width: 100%;
+  }
+  .progress-dot {
+    width: clamp(36px, 4vw, 48px);
+    height: clamp(36px, 4vw, 48px);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+    font-weight: 500;
+    font-size: clamp(15px, 1.6vw, 18px);
+    cursor: pointer;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    flex-shrink: 0;
+    background: transparent;
+  }
+  .progress-dot.part1 {
+    border: 1px solid var(--part1);
+    color: var(--part1);
+  }
+  .progress-dot.part2 {
+    border: 1px solid var(--part2);
+    color: var(--part2);
+  }
+  .progress-dot:hover {
+    background: rgba(31, 24, 18, 0.05);
+  }
+  .progress-dot.part1.active {
+    background: var(--part1);
+    border-color: var(--part1);
+    color: var(--bg-paper-light);
+  }
+  .progress-dot.part2.active {
+    background: var(--part2);
+    border-color: var(--part2);
+    color: var(--bg-paper-light);
+  }
+  .progress-line {
+    width: clamp(14px, 2vw, 26px);
+    height: 1px;
+    background: var(--hairline-strong);
+    flex-shrink: 0;
+  }
+  .progress-line.bridge {
+    width: clamp(20px, 2.8vw, 36px);
+    background: transparent;
+    border-top: 1px dashed var(--ink-secondary);
+  }
+  .progress-hint {
+    text-align: center;
+    font-family: 'Times New Roman', Times, serif;
+    font-style: italic;
+    font-size: 12px;
+    color: var(--ink-secondary);
+    letter-spacing: 0.5px;
+    pointer-events: none;
+    margin-top: -6px;
+    opacity: 0.85;
+  }
+
+  /* --- Map --- */
+  #map {
+    width: 100%;
+    height: 100vh;
+    z-index: 1;
+    background: #f5f1e6;   /* light cream while tiles load */
+  }
+  /* Push Positron tiles toward a B&W "old atlas" feel */
+  .leaflet-tile-pane {
+    filter: grayscale(1) contrast(1.05) brightness(1.02);
+  }
+
+  /* --- Leaflet overrides (cream zoom controls) --- */
+  .leaflet-control-zoom {
+    border: none !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18) !important;
+    border-radius: 0 !important;
+  }
+  .leaflet-control-zoom a {
+    background: var(--bg-paper-light) !important;
+    color: var(--ink-primary) !important;
+    border: 1px solid var(--hairline-strong) !important;
+    width: 32px !important;
+    height: 32px !important;
+    line-height: 32px !important;
+    font-size: 17px !important;
+    font-family: 'Times New Roman', Times, serif !important;
+    border-radius: 0 !important;
+  }
+  .leaflet-control-zoom a:hover {
+    background: var(--ink-primary) !important;
+    color: var(--bg-paper-light) !important;
+  }
+  .leaflet-control-zoom-in { border-bottom: none !important; }
+  /* Hide zoom buttons while a popup is open — map is frozen */
+  body.map-frozen .leaflet-control-zoom {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  /* While the map is frozen, suppress the grab cursor */
+  body.map-frozen .leaflet-grab,
+  body.map-frozen .leaflet-container {
+    cursor: default !important;
+  }
+
+  /* --- Map Markers (classic cream circles) --- */
+  .marker-pin {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.25s ease, background 0.25s ease, color 0.25s ease;
+    position: relative;
+    background: var(--bg-paper-light);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  }
+  .marker-pin::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+  }
+  .marker-pin:hover {
+    transform: scale(1.12);
+    background: var(--ink-primary);
+    color: var(--bg-paper-light);
+  }
+  .marker-part1 {
+    border: 1.5px solid var(--part1);
+    color: var(--part1);
+  }
+  .marker-part1::after { border-top: 6px solid var(--part1); }
+  .marker-part1:hover {
+    background: var(--part1);
+    color: var(--bg-paper-light);
+  }
+  .marker-part2 {
+    border: 1.5px solid var(--part2);
+    color: var(--part2);
+  }
+  .marker-part2::after { border-top: 6px solid var(--part2); }
+  .marker-part2:hover {
+    background: var(--part2);
+    color: var(--bg-paper-light);
+  }
+
+  /* Pulse element kept in DOM but hidden (no glowing animation) */
+  .marker-pulse { display: none; }
+
+  /* --- Popup (cream museum-label style) --- */
+  .leaflet-popup-content-wrapper {
+    background: var(--bg-paper-light) !important;
+    border-radius: 0 !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25) !important;
+    border: 1px solid var(--hairline-strong) !important;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+  .leaflet-popup-tip {
+    background: var(--bg-paper-light) !important;
+    border: 1px solid var(--hairline-strong) !important;
+    box-shadow: none !important;
+  }
+  .leaflet-popup-close-button { display: none !important; } /* we render our own */
+  .leaflet-popup-content {
+    margin: 0 !important;
+    width: min(85vw, 720px) !important;
+    max-height: calc(100vh - 320px) !important;
+    overflow-y: auto !important;
+    min-width: 320px;
+    scrollbar-width: thin;
+    color: var(--ink-primary);
+  }
+  .leaflet-popup-content::-webkit-scrollbar { width: 6px; }
+  .leaflet-popup-content::-webkit-scrollbar-thumb {
+    background: var(--hairline);
+    border-radius: 0;
+  }
+
+  .popup-inner {
+    padding: 18px 26px 22px;
+    position: relative;
+    font-family: 'Times New Roman', Times, serif;
+  }
+
+  .popup-body-grid {
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: 24px;
+    margin-top: 4px;
+  }
+  .popup-body-col { min-width: 0; }
+
+  .popup-stop-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .popup-stop-num {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--ink-secondary);
+  }
+  .popup-year {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 12px;
+    font-style: italic;
+    color: var(--ink-secondary);
+    letter-spacing: 0.5px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    font-weight: 400;
+  }
+
+  .popup-location {
+    font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+    font-size: 28px;
+    font-weight: 500;
+    color: var(--ink-primary);
+    margin-bottom: 2px;
+    line-height: 1.15;
+    letter-spacing: 0.3px;
+  }
+  .popup-region {
+    font-family: 'Times New Roman', Times, serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--ink-secondary);
+    margin-bottom: 14px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  /* Section tag: small caps with hairlines, no colored pill */
+  .popup-section-tag {
+    display: block;
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: var(--ink-primary);
+    background: transparent;
+    padding: 8px 0;
+    margin-bottom: 16px;
+    border-top: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--hairline);
+    border-radius: 0;
+  }
+
+  .popup-lyric {
+    font-family: 'Times New Roman', Times, serif;
+    font-style: italic;
+    font-size: 15px;
+    line-height: 1.75;
+    font-weight: 400;
+    margin-bottom: 12px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--ink-primary);
+    border-radius: 0;
+  }
+  .popup-lyric.lyric-translation {
+    margin-top: 0;
+    margin-bottom: 14px;
+    font-size: 13.5px;
+    color: var(--ink-secondary);
+    padding-left: 14px;
+    border-left: 1px solid var(--hairline);
+    background: transparent;
+  }
+
+  /* Quotation marks around lyrics — elegant Garamond glyphs */
+  .popup-lyric::before,
+  .lyric-line::before,
+  .lyric-translation::before {
+    content: '"';
+    font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+    font-size: 1.25em;
+    font-weight: 600;
+    margin-right: 0.05em;
+    opacity: 0.55;
+  }
+  .popup-lyric::after,
+  .lyric-line::after,
+  .lyric-translation::after {
+    content: '"';
+    font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+    font-size: 1.25em;
+    font-weight: 600;
+    margin-left: 0.04em;
+    opacity: 0.55;
+  }
+
+  .popup-section-label {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+    color: var(--ink-secondary);
+    opacity: 1;
+  }
+  .popup-story {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--ink-primary);
+  }
+
+  /* --- Popup Top Navigation Bar --- */
+  .popup-top-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .popup-nav-btn {
+    flex: 1;
+    padding: 8px 14px;
+    background: transparent;
+    border: 1px solid var(--ink-primary);
+    border-radius: 2px;
+    color: var(--ink-primary);
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 13px;
+    font-weight: 400;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    letter-spacing: 0.3px;
+  }
+  .popup-nav-btn:hover {
+    background: var(--ink-primary);
+    color: var(--bg-paper-light);
+  }
+  .popup-nav-prev { text-align: left; }
+  .popup-nav-next { text-align: right; }
+  .popup-nav-spacer { flex: 1; }
+  .popup-close-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 2px;
+    background: transparent;
+    border: 1px solid var(--ink-primary);
+    color: var(--ink-primary);
+    font-size: 15px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-family: 'Times New Roman', Times, serif;
+    line-height: 1;
+    padding: 0;
+  }
+  .popup-close-btn:hover {
+    background: var(--ink-primary);
+    color: var(--bg-paper-light);
+  }
+
+  /* --- Lyrics Panel (cream manuscript, always fullscreen when open) --- */
+  #lyrics-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1100;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--bg-paper);
+  }
+  #lyrics-panel.open {
+    max-height: 100vh;
+  }
+  #lyrics-panel-inner {
+    padding: 0;
+    overflow-y: auto;
+    max-height: 100vh;
+  }
+
+  .lyrics-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-paper);
+    border-bottom: 1px solid var(--hairline);
+    padding: 22px 30px 16px;
+  }
+  .lyrics-header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 880px;
+    margin: 0 auto;
+    gap: 16px;
+  }
+  .lyrics-header-text h2 {
+    font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+    font-size: 32px;
+    font-weight: 500;
+    color: var(--ink-primary);
+    letter-spacing: 0.3px;
+  }
+  .lyrics-close {
+    background: transparent;
+    border: 1px solid var(--ink-primary);
+    color: var(--ink-primary);
+    width: 36px;
+    height: 36px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, color 0.2s ease;
+    flex-shrink: 0;
+    font-family: 'Times New Roman', Times, serif;
+  }
+  .lyrics-close:hover {
+    background: var(--ink-primary);
+    color: var(--bg-paper);
+  }
+
+  .lyrics-body {
+    max-width: 820px;
+    margin: 28px auto 36px;
+    padding: 0 28px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    font-family: 'Times New Roman', Times, serif;
+    color: var(--ink-primary);
+  }
+
+  .lyric-section {
+    margin-bottom: 28px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .lyric-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+  .lyric-section.lyric-section-clickable {
+    cursor: pointer;
+    transition: background 0.3s ease;
+    border-radius: 0;
+    margin-left: -16px;
+    margin-right: -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .lyric-section.lyric-section-clickable:hover {
+    background: rgba(31, 24, 18, 0.04);
+  }
+  .lyric-section-jump {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 11px;
+    font-style: italic;
+    color: var(--ink-secondary);
+    letter-spacing: 1px;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    white-space: nowrap;
+    text-transform: none;
+  }
+  .lyric-section-clickable:hover .lyric-section-jump {
+    opacity: 1;
+  }
+  .lyric-section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .lyric-section-title {
+    font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+    font-size: 18px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--ink-primary);
+  }
+  .lyric-section.part1 .lyric-section-title { color: var(--part1); }
+  .lyric-section.part2 .lyric-section-title { color: var(--part2); }
+  .lyric-section-place { display: none; }
+  .lyric-line {
+    font-family: 'Times New Roman', Times, serif;
+    font-style: italic;
+    font-size: 16px;
+    line-height: 1.85;
+    font-weight: 400;
+    color: var(--ink-primary);
+  }
+  .lyric-translation {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--ink-secondary);
+    font-style: italic;
+    margin-top: 10px;
+    padding-left: 14px;
+    border-left: 1px solid var(--hairline);
+  }
+  .lyric-stage-direction {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 12.5px;
+    font-style: italic;
+    color: var(--ink-secondary);
+    letter-spacing: 0.3px;
+    margin-top: 12px;
+    padding: 8px 0;
+  }
+
+  /* --- Lyrics Toggle Button (rectangular, dark on cream) --- */
+  #lyrics-toggle {
+    position: fixed;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 998;
+    padding: 9px 22px;
+    border: 1px solid var(--header-text);
+    border-radius: 2px;
+    background: rgba(10,10,10,0.85);
+    backdrop-filter: blur(10px);
+    color: var(--header-text);
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.3s ease, color 0.3s ease;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  #lyrics-toggle:hover {
+    background: var(--header-text);
+    color: var(--header-bg);
+  }
+  #lyrics-toggle.hidden { display: none; }
+
+  /* --- Intro Overlay --- */
+  #intro-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: var(--bg-paper);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 1s ease, visibility 1s ease;
+    overflow-y: auto;
+    padding: 60px 24px;
+  }
+  #intro-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .intro-content {
+    max-width: 640px;
+    width: 100%;
+    text-align: center;
+    margin: auto;
+    font-family: 'Times New Roman', Times, serif;
+    color: var(--ink-primary);
+  }
+  /* Decorative thin rule above the title — classical academic title page */
+  .intro-content::before {
+    content: '';
+    display: block;
+    width: 60px;
+    height: 1px;
+    background: var(--ink-secondary);
+    margin: 0 auto 28px;
+    animation: fadeUp 1s ease 0.2s both;
+  }
+  #intro-overlay h1 {
+    font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+    font-size: 56px;
+    font-weight: 500;
+    color: var(--ink-primary);
+    margin-bottom: 4px;
+    text-align: center;
+    line-height: 1.1;
+    letter-spacing: 0.5px;
+    animation: fadeUp 1s ease 0.3s both;
+  }
+  .intro-translation {
+    font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+    font-style: italic;
+    font-size: 20px;
+    font-weight: 400;
+    color: var(--ink-secondary);
+    margin-bottom: 30px;
+    animation: fadeUp 1s ease 0.4s both;
+  }
+  .intro-subtitle { display: none; } /* description explains what it is */
+  .intro-description {
+    margin-bottom: 36px;
+    text-align: left;
+    animation: fadeUp 1s ease 0.7s both;
+    border-top: 1px solid var(--hairline-strong);
+    padding-top: 28px;
+  }
+  .intro-description p {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 16px;
+    line-height: 1.75;
+    color: var(--ink-primary);
+    margin-bottom: 14px;
+    text-align: justify;
+  }
+  .intro-description p:last-child { margin-bottom: 0; }
+  .intro-meta {
+    margin-bottom: 36px;
+    padding-top: 28px;
+    border-top: 1px solid var(--hairline-strong);
+    animation: fadeUp 1s ease 0.85s both;
+  }
+  .intro-meta-label {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 11px;
+    color: var(--ink-secondary);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .intro-meta-value {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 15px;
+    color: var(--ink-primary);
+    line-height: 1.7;
+    font-weight: 400;
+  }
+  .intro-course {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 13px;
+    color: var(--ink-secondary);
+    margin-top: 8px;
+    font-style: italic;
+  }
+  .intro-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    animation: fadeUp 1s ease 1s both;
+  }
+  .intro-btn {
+    padding: 12px 36px;
+    border: 1px solid var(--ink-primary);
+    border-radius: 2px;
+    background: transparent;
+    color: var(--ink-primary);
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 15px;
+    font-weight: 400;
+    cursor: pointer;
+    transition: background 0.3s ease, color 0.3s ease;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .intro-btn:hover {
+    background: var(--ink-primary);
+    color: var(--bg-paper);
+  }
+  .intro-scroll-hint {
+    font-family: 'Times New Roman', Times, serif;
+    font-style: italic;
+    font-size: 12px;
+    color: var(--ink-secondary);
+    letter-spacing: 0.5px;
+    text-transform: none;
+    margin-top: 6px;
+  }
+  .intro-scroll-hint .arrow {
+    display: inline-block;
+    margin-left: 4px;
+    animation: scrollBounce 2s ease-in-out infinite;
+    font-style: normal;
+  }
+  @keyframes scrollBounce {
+    0%, 100% { transform: translateY(0); opacity: 0.55; }
+    50% { transform: translateY(4px); opacity: 1; }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* --- Pin count badge --- */
+  .pin-count {
+    position: fixed;
+    top: 84px;
+    right: 30px;
+    z-index: 1000;
+    font-size: 11px;
+    font-style: italic;
+    font-family: 'Times New Roman', Times, serif;
+    color: var(--header-text-dim);
+    pointer-events: none;
+  }
+
+  /* --- Responsive --- */
+  @media (max-width: 768px) {
+    #header {
+      padding: 12px 16px 12px;
+      gap: 10px;
+    }
+    .header-top { grid-template-columns: auto 1fr auto; }
+    #title-area h1 { font-size: 22px; }
+    .menu-toggle { width: 26px; height: 18px; }
+    .menu-panel { min-width: 220px; }
+
+    #intro-overlay { padding: 40px 18px; }
+    #intro-overlay h1 { font-size: 38px; }
+    .intro-translation { font-size: 16px; }
+    .intro-description p { text-align: left; font-size: 15px; }
+    .intro-btn { padding: 11px 28px; font-size: 14px; }
+
+    .pin-count { display: none; }
+
+    .leaflet-popup-content {
+      width: min(92vw, 360px) !important;
+      max-height: calc(100vh - 180px) !important;
+    }
+    .popup-body-grid {
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .popup-location { font-size: 24px; }
+    .popup-nav-btn { font-size: 12px; padding: 7px 10px; }
+    .popup-close-btn { width: 30px; height: 30px; font-size: 14px; }
+
+    .lyrics-header { padding: 18px 18px 14px; }
+    .lyrics-header-text h2 { font-size: 26px; }
+    .lyrics-body { padding: 0 20px; margin: 22px auto 28px; }
+    .lyric-section-jump { display: none; }
+  }
+  @media (max-width: 480px) {
+    .progress-dot { width: 28px; height: 28px; font-size: 12px; }
+    .progress-line { width: 9px; }
+    .progress-line.bridge { width: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Intro Overlay -->
+<div id="intro-overlay">
+  <div class="intro-content">
+    <h1>De Cádiz a Hanalei</h1>
+    <div class="intro-translation">From Cádiz to Hanalei</div>
+    <p class="intro-subtitle">An interactive lyric map</p>
+
+    <div class="intro-description">
+      <p>De Cádiz a Hanalei traces one rhythm, el compás, across five centuries and three oceans: from Spanish bolero through Caribbean son to Hawaiian reggae. Click any pin to read the verse it inspired and the historical chain that connects 1717 Cádiz to tonight in Hanalei.</p>
+
+      <p>Luke Sonson is Hawaiian and Jacobo Alvarez Martinez is Spanish, so we built the song around the musical lineage they share. Louis Murray (UK) and Robby Meek (Singapore) come from cultures that did not fit cleanly into this particular combination, but we were all drawn to the broader question of how music shifts as it travels across cultures.</p>
+    </div>
+
+    <div class="intro-meta">
+      <div class="intro-meta-label">Project created by</div>
+      <div class="intro-meta-value">Robby Meek &nbsp;·&nbsp; Louis Murray &nbsp;·&nbsp; Luke Sonson &nbsp;·&nbsp; Jacobo Alvarez Martinez</div>
+      <div class="intro-course">COMPLIT 156: Songmaking and the Idea of Lyric</div>
+    </div>
+
+    <div class="intro-buttons">
+      <button class="intro-btn" id="intro-enter">Explore the map</button>
+      <div class="intro-scroll-hint">or scroll to continue<span class="arrow">↓</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<div id="header">
+  <div class="header-top">
+    <div class="menu-wrap">
+      <button id="menu-toggle" class="menu-toggle" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+      <div id="menu-panel" class="menu-panel">
+        <button class="menu-item" data-action="filter-all">All Stops</button>
+        <button class="menu-item" data-action="filter-part1">Part I · Spanish Opening</button>
+        <button class="menu-item" data-action="filter-part2">Part II · Hawaiian Reggae</button>
+        <div class="menu-divider"></div>
+        <button class="menu-item" data-action="home">Home</button>
+        <button class="menu-item" data-action="lyrics">View Lyrics</button>
+      </div>
+    </div>
+    <div id="title-area">
+      <h1>De Cádiz a Hanalei</h1>
+    </div>
+  </div>
+  <div id="progress-bar"></div>
+  <div class="progress-hint">click any stop to follow the journey</div>
+</div>
+
+<div class="pin-count" id="pin-count"></div>
+
+<!-- Map -->
+<div id="map"></div>
+
+<!-- Lyrics Toggle -->
+<button id="lyrics-toggle">View Full Lyrics ↑</button>
+
+<!-- Lyrics Panel -->
+<div id="lyrics-panel">
+  <div id="lyrics-panel-inner">
+    <div class="lyrics-header">
+      <div class="lyrics-header-inner">
+        <div class="lyrics-header-text">
+          <h2>De Cádiz a Hanalei</h2>
+        </div>
+        <button class="lyrics-close" id="lyrics-close">✕</button>
+      </div>
+    </div>
+
+    <div class="lyrics-body">
+
+      <!-- PART I -->
+      <div class="lyric-section part1 lyric-section-clickable" data-stop="1">
+        <div class="lyric-section-header">
+          <span class="lyric-section-title">Verse 1</span>
+          <span class="lyric-section-place">Cádiz, Spain · the embarkation</span>
+          <span class="lyric-section-jump">Jump to map →</span>
+        </div>
+        <div class="lyric-line">
+          En el puerto de Cádiz amanece el galeón,<br>
+          con la guitarra al hombro y el sol en el bolsillo.<br>
+          Yo no llevo equipaje, solo llevo un compás,<br>
+          y el compás es un mar que no se acaba jamás.
+        </div>
+        <div class="lyric-translation">
+          In the port of Cádiz the galleon dawns,<br>
+          With my guitar on my shoulder and the sun in my pocket.<br>
+          I carry no luggage, only a rhythm,<br>
+          And the rhythm is a sea that never ends.
+        </div>
+      </div>
+
+      <div class="lyric-section part1 lyric-section-clickable" data-stop="2">
+        <div class="lyric-section-header">
+          <span class="lyric-section-title">Verse 2</span>
+          <span class="lyric-section-place">La Habana, Cuba · the son cubano is born</span>
+          <span class="lyric-section-jump">Jump to map →</span>
+        </div>
+        <div class="lyric-line">
+          Llegué a La Habana, le di la cuerda al son,<br>
+          el bongó respondió como un nuevo corazón.<br>
+          La clave dijo "tres-dos, tres-dos" en la pared,<br>
+          y desde aquella noche, el mundo bailó al revés.
+        </div>
+        <div class="lyric-translation">
+          I arrived in Habana, I tuned up the son,<br>
+          The bongo answered like a new heart.<br>
+          The clave said "three-two, three-two" against the wall,<br>
+          And from that night, the world danced backwards.
+        </div>
+      </div>
+
+      <div class="lyric-section part1 lyric-section-clickable" data-stop="3">
+        <div class="lyric-section-header">
+          <span class="lyric-section-title">Verse 3</span>
+          <span class="lyric-section-place">Monterey, Alta California · the vaqueros depart, 1832</span>
+          <span class="lyric-section-jump">Jump to map →</span>
+        </div>
+        <div class="lyric-line">
+          De Monterey salieron tres jinetes del cantar,<br>
+          con la silla mexicana y el lazo en el costal.<br>
+          "Adiós, mi Alta California, voy a una isla del mar<br>
+          donde un rey, Kamehameha, me ha llamado a enseñar."
+        </div>
+        <div class="lyric-translation">
+          From Monterey three riders of song set out,<br>
+          With the Mexican saddle and the lasso in their packs.<br>
+          "Goodbye, my Alta California, I go to an island in the sea<br>
+          Where a king, Kamehameha, has called me to teach."
+        </div>
+      </div>
+
+      <div class="lyric-section part1 lyric-section-clickable" data-stop="4">
+        <div class="lyric-section-header">
+          <span class="lyric-section-title">Bridge</span>
+          <span class="lyric-section-place">Lahaina, Maui · the arrival, 1832 · the music shifts</span>
+          <span class="lyric-section-jump">Jump to map →</span>
+        </div>
+        <div class="lyric-line">
+          Y cuando llegué a Lahaina, en mil ochocientos treinta y dos,<br>
+          dejé caer la guitarra y se levantó otra voz.<br>
+          El viento Kauaʻula me cantó al desembarcar,<br>
+          y el compás aprendió a caminar de otra manera…
+        </div>
+        <div class="lyric-translation">
+          And when I arrived in Lahaina, in eighteen thirty-two,<br>
+          I let the guitar fall and another voice rose up.<br>
+          The Kauaʻula wind sang to me as I stepped ashore,<br>
+          And the rhythm learned to walk in another way…
+        </div>
+        <div class="lyric-stage-direction">
+          Drum kit enters. One-drop pulse begins. Hammond skank on the off-beats. Modal shift from D minor to D major. Tempo lifts ♩ = 64 → 88.
+        </div>
+      </div>
+
+      <!-- PART II -->
+      <div class="lyric-section part2">
+        <div class="lyric-section-header">
+          <span class="lyric-section-title">Pre-Chorus</span>
+          <span class="lyric-section-place">the language and meter shift</span>
+        </div>
+        <div class="lyric-line">
+          From Cádiz to Habana, from California to Lahaina,<br>
+          the ship kept moving — not north, but west, then west again,<br>
+          till the Spanish guitar got loosened and the bolero became one drop,<br>
+          and a wave broke at Mākaha and the rhythm wouldn't stop.
+        </div>
+      </div>
+
+      <div class="lyric-section part2">
+        <div class="lyric-section-header">
+          <span class="lyric-section-title">Chorus</span>
+          <span class="lyric-section-place">full reggae one-drop</span>
+        </div>
+        <div class="lyric-line">
+          De Cádiz a Hanalei — na ka makani, na ka mele —<br>
+          a song walked across the world to find a place to stay.<br>
+          Hawaiʻi nei, the ember's still alive, the rhythm's home tonight,<br>
+          from one-two-three to one-and-two — aloha keeps it right.
+        </div>
+        <div class="lyric-translation">
+          From Cádiz to Hanalei — by the wind, by the song —<br>
+          A song walked across the world to find a place to stay.<br>
+          Beloved Hawaiʻi, the ember is still alive, the rhythm is home tonight,<br>
+          From one-two-three to one-and-two — aloha keeps it right.
+        </div>
+      </div>
+
+      <div class="lyric-section part2 lyric-section-clickable" data-stop="5">
+        <div class="lyric-section-header">
+          <span class="lyric-section-title">Verse 4</span>
+          <span class="lyric-section-place">Waimea &amp; Mauna Kea · the slack-key opens</span>
+          <span class="lyric-section-jump">Jump to map →</span>
+        </div>
+        <div class="lyric-line">
+          On the slopes of Mauna Kea, where the paniolo ride,<br>
+          the Spanish guitar got loosened and the slack-key opened wide.<br>
+          Kī hōʻalu in the morning, in the Kīpuʻupuʻu wind,<br>
+          and the cattle walked to Kawaihae like the rhythm wouldn't end.
+        </div>
+      </div>
+
+      <div class="lyric-section part2 lyric-section-clickable" data-stop="6">
+        <div class="lyric-section-header">
+          <span class="lyric-section-title">Verse 5</span>
+          <span class="lyric-section-place">Honolulu / Waikīkī Shell · May 6, 1979 — Bob Marley arrives</span>
+          <span class="lyric-section-jump">Jump to map →</span>
+        </div>
+        <div class="lyric-line">
+          Nineteen seventy-nine, the Lion came to town,<br>
+          Waikīkī under the moon, the Wailers laying it down.<br>
+          A one-drop in the islands — well, the islands knew the sound —<br>
+          and a kid in the back row started writing his own.
+        </div>
+      </div>
+
+      <div class="lyric-section part2 lyric-section-clickable" data-stop="7">
+        <div class="lyric-section-header">
+          <span class="lyric-section-title">Verse 6</span>
+          <span class="lyric-section-place">Mākaha, Oʻahu · Israel Kamakawiwoʻole</span>
+          <span class="lyric-section-jump">Jump to map →</span>
+        </div>
+        <div class="lyric-line">
+          On the leeward side at Mākaha, where the brother once sat down,<br>
+          he picked up an ʻukulele and he turned the world around.<br>
+          "Over the rainbow," soft as the trade-wind in the palm,<br>
+          and the reggae of the islands carried Iz on every wave.
+        </div>
+      </div>
+
+      <div class="lyric-section part2 lyric-section-clickable" data-stop="8">
+        <div class="lyric-section-header">
+          <span class="lyric-section-title">Verse 7</span>
+          <span class="lyric-section-place">Hanalei, Kauaʻi · the music settles in, today</span>
+          <span class="lyric-section-jump">Jump to map →</span>
+        </div>
+        <div class="lyric-line">
+          And tonight in Hanalei, where the moon is on the bay,<br>
+          a kid with a slack-key ʻukulele plays a one-drop all the way.<br>
+          He doesn't know the journey, but the journey knows him well —<br>
+          from Cádiz to Hanalei, every wave's a story to tell.
+        </div>
+      </div>
+
+      <div class="lyric-section part2">
+        <div class="lyric-section-header">
+          <span class="lyric-section-title">Final Chorus</span>
+          <span class="lyric-section-place">with extended Hawaiian tag</span>
+        </div>
+        <div class="lyric-line">
+          De Cádiz a Hanalei — na ka makani, na ka mele —<br>
+          a song walked across the world to find a place to stay.<br>
+          Hawaiʻi nei, the ember's still alive, the rhythm's home tonight,<br>
+          from one-two-three to one-and-two — aloha keeps it right.
+          <br><br>
+          Eia nō ka leo, eia nō ke ahi,<br>
+          aloha mai, aloha aku, mai Kepānia a hiki i Hanalei.
+        </div>
+        <div class="lyric-translation">
+          Here is the voice, here is the fire,<br>
+          Love comes, love goes, from Spain (Kepānia) all the way to Hanalei.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ====== DATA ======
+const locations = [
+  // --- PART I: Spanish Opening (bolero / son cubano) ---
+  {
+    part: 1,
+    order: 1,
+    section: "Verse 1 · The Embarkation",
+    location: "Cádiz",
+    region: "Andalusia, Spain",
+    year: "1717",
+    lat: 36.5298,
+    lng: -6.2924,
+    lyric: "En el puerto de Cádiz amanece el galeón,\ncon la guitarra al hombro y el sol en el bolsillo.\nYo no llevo equipaje, solo llevo un compás,\ny el compás es un mar que no se acaba jamás.",
+    lyricEnglish: "In the port of Cádiz the galleon dawns,\nWith my guitar on my shoulder and the sun in my pocket.\nI carry no luggage, only a rhythm,\nAnd the rhythm is a sea that never ends.",
+    story: "Cádiz was the only port in Spain allowed to trade with the Americas starting in 1717, and for two centuries the galleons that left here carried more than goods. They also brought Spanish music: the Andalusian guitar, the bolero rhythm, and the cante hondo of the south. The song starts in Cádiz because this is where the rhythm started to travel."
+  },
+  {
+    part: 1,
+    order: 2,
+    section: "Verse 2 · The Son is Born",
+    location: "La Habana",
+    region: "Cuba",
+    year: "c. 1909",
+    lat: 23.1136,
+    lng: -82.3666,
+    lyric: "Llegué a La Habana, le di la cuerda al son,\nel bongó respondió como un nuevo corazón.\nLa clave dijo \"tres-dos, tres-dos\" en la pared,\ny desde aquella noche, el mundo bailó al revés.",
+    lyricEnglish: "I arrived in Habana, I tuned up the son,\nThe bongo answered like a new heart.\nThe clave said \"three-two, three-two\" against the wall,\nAnd from that night, the world danced backwards.",
+    story: "Cuban son started in eastern Cuba and reached Habana around 1909, where it became the basis for almost all modern Latin popular music. The 3-2 clave pattern shows up directly in the verse. Habana is where the Spanish guitar met West African rhythm, and that mix later fed into Jamaican mento, ska, and reggae."
+  },
+  {
+    part: 1,
+    order: 3,
+    section: "Verse 3 · The Vaqueros Depart",
+    location: "Monterey",
+    region: "Alta California, Mexico",
+    year: "1832",
+    lat: 36.6002,
+    lng: -121.8947,
+    lyric: "De Monterey salieron tres jinetes del cantar,\ncon la silla mexicana y el lazo en el costal.\n\"Adiós, mi Alta California, voy a una isla del mar\ndonde un rey, Kamehameha, me ha llamado a enseñar.\"",
+    lyricEnglish: "From Monterey three riders of song set out,\nWith the Mexican saddle and the lasso in their packs.\n\"Goodbye, my Alta California, I go to an island in the sea\nWhere a king, Kamehameha, has called me to teach.\"",
+    story: "Monterey was the capital of Mexican Alta California, and in 1832 King Kamehameha III invited the first vaqueros from here to Hawai'i. They brought the Mexican saddle, the lasso, the Spanish guitar, and the ranchera and corrido vocal styles, all of which became part of paniolo culture in Hawai'i."
+  },
+  {
+    part: 1,
+    order: 4,
+    section: "Bridge · The Hinge",
+    location: "Lahaina",
+    region: "West Maui",
+    year: "1832",
+    lat: 20.8783,
+    lng: -156.6825,
+    lyric: "Y cuando llegué a Lahaina, en mil ochocientos treinta y dos,\ndejé caer la guitarra y se levantó otra voz.\nEl viento Kauaʻula me cantó al desembarcar,\ny el compás aprendió a caminar de otra manera…",
+    lyricEnglish: "And when I arrived in Lahaina, in eighteen thirty-two,\nI let the guitar fall and another voice rose up.\nThe Kauaʻula wind sang to me as I stepped ashore,\nAnd the rhythm learned to walk in another way…",
+    story: "Lahaina was the royal capital of the Kingdom of Hawai'i from 1820 to 1845, and it's also the harbor where the Mexican vaqueros first arrived in 1832. The Kauaʻula is the hot, dry wind that comes down from West Maui, and the song uses it to mark the moment of arrival. This is the structural turning point of the song, where the music itself shifts from bolero to reggae. The 2023 fire is referenced indirectly in the line that the rhythm 'learned to walk in another way.'"
+  },
+
+  // --- PART II: Hawaiian Reggae (one-drop) ---
+  {
+    part: 2,
+    order: 5,
+    section: "Verse 4 · The Slack-Key Opens",
+    location: "Waimea & Mauna Kea",
+    region: "Hawai'i Island",
+    year: "1847",
+    lat: 20.0226,
+    lng: -155.6692,
+    lyric: "On the slopes of Mauna Kea, where the paniolo ride,\nthe Spanish guitar got loosened and the slack-key opened wide.\nKī hōʻalu in the morning, in the Kīpuʻupuʻu wind,\nand the cattle walked to Kawaihae like the rhythm wouldn't end.",
+    story: "Waimea sits between Mauna Kea and Kohala, and it became the center of paniolo culture after 1832. Parker Ranch was founded here in 1847, and Hawaiian musicians took the vaqueros' guitar style and retuned it into kī hōʻalu, also known as slack-key guitar. The Kīpuʻupuʻu is the cold, stinging rain-wind of Waimea, and it gives the place its character. Cattle were driven down to Kawaihae harbor and swum out to waiting ships."
+  },
+  {
+    part: 2,
+    order: 6,
+    section: "Verse 5 · The Lion Comes to Town",
+    location: "Waikīkī Shell",
+    region: "Honolulu, O'ahu",
+    year: "May 6, 1979",
+    lat: 21.2710,
+    lng: -157.8237,
+    lyric: "Nineteen seventy-nine, the Lion came to town,\nWaikīkī under the moon, the Wailers laying it down.\nA one-drop in the islands — well, the islands knew the sound —\nand a kid in the back row started writing his own.",
+    story: "On May 6, 1979, Bob Marley and the Wailers played a sold-out show at the Waikīkī Shell on the Survival tour. People often point to this concert as the moment that started Jawaiian, or island reggae, a Hawaiian version of the Jamaican one-drop played on ʻukulele and slack-key guitar. The song mentions the date directly and credits a 'kid in the back row' who started writing his own music after the show."
+  },
+  {
+    part: 2,
+    order: 7,
+    section: "Verse 6 · The Brother",
+    location: "Mākaha",
+    region: "Leeward Coast, O'ahu",
+    year: "1976 / 1993",
+    lat: 21.4711,
+    lng: -158.2189,
+    lyric: "On the leeward side at Mākaha, where the brother once sat down,\nhe picked up an ʻukulele and he turned the world around.\n\"Over the rainbow,\" soft as the trade-wind in the palm,\nand the reggae of the islands carried Iz on every wave.",
+    story: "Israel Kamakawiwoʻole, known as Iz, grew up in Mākaha and was one of the founders of the Mākaha Sons of Niʻihau in 1976. His 1993 medley of 'Somewhere Over the Rainbow' and 'What a Wonderful World,' recorded with just an ʻukulele, became one of the most famous Hawaiian recordings of the twentieth century, and it also defined the island-reggae sound."
+  },
+  {
+    part: 2,
+    order: 8,
+    section: "Verse 7 + Final Chorus · The Journey's Rest",
+    location: "Hanalei",
+    region: "North Shore, Kaua'i",
+    year: "Tonight",
+    lat: 22.2074,
+    lng: -159.5005,
+    lyric: "And tonight in Hanalei, where the moon is on the bay,\na kid with a slack-key ʻukulele plays a one-drop all the way.\nHe doesn't know the journey, but the journey knows him well —\nfrom Cádiz to Hanalei, every wave's a story to tell.",
+    story: "Hanalei Bay is the endpoint of the song. It isn't formally connected to 1832, but the north-shore Kaua'i sound is one of the modern homes of Hawaiian island reggae. Ending the journey here lets the song spell out a full geographical alphabet from C (Cádiz) to H (Hanalei), and the Hawaiian tag of the final chorus says it directly: 'mai Kepānia a hiki i Hanalei,' which means 'from Spain all the way to Hanalei.'"
+  }
+];
+
+// ====== MAP INIT ======
+// Loose bounds — the map continues seamlessly via worldCopyJump,
+// but we still cap how far north/south the user can wander.
+const journeyBounds = L.latLngBounds(
+  [-30, -260],   // SW corner — well into the Pacific, well south of the journey
+  [60, 30]       // NE corner — north & a bit east of Cádiz
+);
+
+const map = L.map('map', {
+  center: [29, -82],   // Atlantic, midway between Spain and Hawai'i
+  zoom: 3,
+  minZoom: 2,
+  maxZoom: 14,
+  zoomControl: false,
+  attributionControl: false,
+  maxBounds: journeyBounds,
+  maxBoundsViscosity: 0.8,
+  worldCopyJump: true
+});
+
+L.control.zoom({ position: 'topright' }).addTo(map);
+
+// CartoDB Positron — minimalist light cartography, free with no auth required
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 19
+}).addTo(map);
+
+// Pre-compute bounds for each filter view
+const allJourneyBounds = L.latLngBounds(locations.map(l => [l.lat, l.lng]));
+const part1Bounds = L.latLngBounds(locations.filter(l => l.part === 1).map(l => [l.lat, l.lng]));
+const part2Bounds = L.latLngBounds(locations.filter(l => l.part === 2).map(l => [l.lat, l.lng]));
+
+function getViewPadding() {
+  return window.innerWidth < 768 ? [40, 40] : [80, 80];
+}
+
+// Fit the full journey on load (instant, no animation)
+map.fitBounds(allJourneyBounds, { padding: getViewPadding() });
+
+// ====== JOURNEY POLYLINES ======
+const part1Path = locations.filter(l => l.part === 1).map(l => [l.lat, l.lng]);
+const part2Path = locations.filter(l => l.part === 2).map(l => [l.lat, l.lng]);
+// Bridge segment from Lahaina (last of Part I) to Waimea (first of Part II)
+const bridgePath = [
+  locations.filter(l => l.part === 1).slice(-1)[0],
+  locations.filter(l => l.part === 2)[0]
+].map(l => [l.lat, l.lng]);
+
+const part1Line = L.polyline(part1Path, {
+  color: '#9b6a3f',
+  weight: 1.8,
+  opacity: 0.7,
+  dashArray: '4, 6'
+}).addTo(map);
+
+const bridgeLine = L.polyline(bridgePath, {
+  color: '#8a7d62',
+  weight: 1.2,
+  opacity: 0.5,
+  dashArray: '2, 5'
+}).addTo(map);
+
+const part2Line = L.polyline(part2Path, {
+  color: '#4a6b7a',
+  weight: 1.8,
+  opacity: 0.7,
+  dashArray: '4, 6'
+}).addTo(map);
+
+// ====== MARKERS ======
+let markers = [];
+
+function createMarkerIcon(loc) {
+  const cls = loc.part === 1 ? 'marker-part1' : 'marker-part2';
+  return L.divIcon({
+    className: '',
+    html: `<div class="marker-pin ${cls}"><div class="marker-pulse"></div>${loc.order}</div>`,
+    iconSize: [38, 46],
+    iconAnchor: [19, 46],
+    popupAnchor: [0, -50]
+  });
+}
+
+function createPopupContent(loc) {
+  const cls = loc.part === 1 ? 'popup-part1' : 'popup-part2';
+  const lyricHtml = loc.lyric.replace(/\n/g, '<br>');
+  const translationBlock = loc.lyricEnglish
+    ? `<div class="popup-lyric lyric-translation">${loc.lyricEnglish.replace(/\n/g, '<br>')}</div>`
+    : '';
+  // Previous and next location for the top nav
+  const prevLoc = loc.order > 1 ? locations[loc.order - 2] : null;
+  const nextLoc = loc.order < locations.length ? locations[loc.order] : null;
+  const prevBtn = prevLoc
+    ? `<button class="popup-nav-btn popup-nav-prev" data-target="${prevLoc.order}">← ${prevLoc.location}</button>`
+    : '<div class="popup-nav-spacer"></div>';
+  const nextBtn = nextLoc
+    ? `<button class="popup-nav-btn popup-nav-next" data-target="${nextLoc.order}">${nextLoc.location} →</button>`
+    : '<div class="popup-nav-spacer"></div>';
+  return `
+    <div class="${cls}">
+      <div class="popup-inner">
+        <div class="popup-top-nav">
+          ${prevBtn}
+          ${nextBtn}
+          <button class="popup-close-btn" aria-label="Close">✕</button>
+        </div>
+        <div class="popup-stop-row">
+          <div class="popup-stop-num">Stop ${loc.order} of 8</div>
+          <div class="popup-year">${loc.year}</div>
+        </div>
+        <div class="popup-location">${loc.location}</div>
+        <div class="popup-region">${loc.region}</div>
+        <div class="popup-section-tag">${loc.section}</div>
+        <div class="popup-body-grid">
+          <div class="popup-body-col">
+            <div class="popup-lyric">${lyricHtml}</div>
+            ${translationBlock}
+          </div>
+          <div class="popup-body-col">
+            <div class="popup-section-label">Historical Context</div>
+            <div class="popup-story">${loc.story}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Per-stop zoom — about the same as how Part II zooms into Hawai'i
+const STOP_ZOOM = 8.5;
+
+// Smoothly fly to a given stop number (1..8) and open its popup.
+// Duration scales with distance so adjacent-stop nav feels snappy and far-away nav feels deliberate.
+// The map stays frozen for the ENTIRE journey: from the moment navigation starts,
+// through the flyTo animation, until the popup opens.
+function navigateToStop(order) {
+  const targetMarker = markers.find(m => m._songData.order === order);
+  if (!targetMarker) return;
+  const loc = targetMarker._songData;
+
+  // Any manual nav cancels the intro's auto-navigation timer.
+  if (typeof clearAutoNav === 'function') clearAutoNav();
+
+  // Closing the previous popup synchronously fires popupclose → unfreezeMap.
+  // We immediately freeze again so the upcoming flyTo animation stays inert
+  // (programmatic flyTo still works on a frozen map).
+  map.closePopup();
+  if (typeof freezeMap === 'function') freezeMap();
+
+  const currentZoom = map.getZoom();
+  const targetZoom = Math.max(currentZoom, STOP_ZOOM);
+  const distance = map.distance(map.getCenter(), [loc.lat, loc.lng]);
+
+  // Smooth duration based on how far we're traveling
+  let duration;
+  if (distance > 2000000) duration = 1.6;        // transoceanic
+  else if (distance > 500000) duration = 1.2;    // continental
+  else if (distance > 50000) duration = 0.85;    // inter-island
+  else duration = 0.55;                          // nearby
+
+  map.flyTo([loc.lat, loc.lng], targetZoom, { duration: duration });
+  map.once('moveend', () => targetMarker.openPopup());
+}
+
+locations.forEach(loc => {
+  const marker = L.marker([loc.lat, loc.lng], {
+    icon: createMarkerIcon(loc)
+  }).addTo(map);
+
+  marker.bindPopup(createPopupContent(loc), {
+    maxWidth: 720,
+    minWidth: 320,
+    closeButton: false,   // we render our own X in the popup header
+    closeOnClick: false,  // map is frozen while open — only the X button closes
+    className: '',
+    autoPan: true,
+    autoPanPaddingTopLeft: [30, 195],   // clears the cream header + larger progress bar + hint text
+    autoPanPaddingBottomRight: [30, 100]
+  });
+
+  marker._songData = loc;
+
+  // Override the default click-to-toggle so we can fly first, THEN open
+  marker.off('click');
+  marker.on('click', () => {
+    if (marker.isPopupOpen()) return;
+    navigateToStop(loc.order);
+  });
+
+  // Sync the progress bar AND freeze/unfreeze the map when popups open/close
+  marker.on('popupopen', () => {
+    setActiveDot(loc.order);
+    freezeMap();
+  });
+  marker.on('popupclose', () => {
+    setActiveDot(null);
+    unfreezeMap();
+  });
+
+  markers.push(marker);
+});
+
+// ====== MAP FREEZE ======
+// While a popup is open the map should be inert: no drag, no zoom, no clicks.
+// Only the popup's X button (and its prev/next buttons) can dismiss/navigate.
+function freezeMap() {
+  map.dragging.disable();
+  map.touchZoom.disable();
+  map.doubleClickZoom.disable();
+  map.scrollWheelZoom.disable();
+  map.boxZoom.disable();
+  if (map.keyboard) map.keyboard.disable();
+  if (map.tap) map.tap.disable();
+  document.body.classList.add('map-frozen');
+}
+function unfreezeMap() {
+  map.dragging.enable();
+  map.touchZoom.enable();
+  map.doubleClickZoom.enable();
+  map.scrollWheelZoom.enable();
+  map.boxZoom.enable();
+  if (map.keyboard) map.keyboard.enable();
+  if (map.tap) map.tap.enable();
+  document.body.classList.remove('map-frozen');
+}
+
+// ====== PROGRESS BAR ======
+const progressBarEl = document.getElementById('progress-bar');
+locations.forEach((loc, i) => {
+  if (i > 0) {
+    const line = document.createElement('div');
+    const isHinge = loc.part === 2 && locations[i - 1].part === 1;
+    line.className = 'progress-line' + (isHinge ? ' bridge' : '');
+    progressBarEl.appendChild(line);
+  }
+  const dot = document.createElement('button');
+  dot.className = `progress-dot part${loc.part}`;
+  dot.dataset.stop = loc.order;
+  dot.textContent = loc.order;
+  dot.title = `${loc.order}. ${loc.location} — ${loc.region} (${loc.year})`;
+  dot.addEventListener('click', (e) => {
+    e.stopPropagation();
+    navigateToStop(loc.order);
+  });
+  progressBarEl.appendChild(dot);
+});
+
+function setActiveDot(order) {
+  document.querySelectorAll('.progress-dot').forEach(d => d.classList.remove('active'));
+  if (order != null) {
+    const dot = document.querySelector(`.progress-dot[data-stop="${order}"]`);
+    if (dot) dot.classList.add('active');
+  }
+}
+
+// Popup nav + close buttons (delegated since popup HTML is recreated each open)
+document.addEventListener('click', (e) => {
+  const navBtn = e.target.closest('.popup-nav-btn');
+  if (navBtn) {
+    e.stopPropagation();
+    const targetOrder = parseInt(navBtn.dataset.target);
+    if (!isNaN(targetOrder)) navigateToStop(targetOrder);
+    return;
+  }
+  const closeBtn = e.target.closest('.popup-close-btn');
+  if (closeBtn) {
+    e.stopPropagation();
+    // Determine which Part the currently-open popup belongs to BEFORE closing it
+    const openMarker = markers.find(m => m.isPopupOpen());
+    const part = openMarker ? openMarker._songData.part : null;
+    map.closePopup();
+    // Part 1 stop closed → zoom out to whole journey.
+    // Part 2 stop closed → zoom into Hawai'i (Part II view).
+    const targetBounds = part === 2 ? part2Bounds : allJourneyBounds;
+    map.flyToBounds(targetBounds, { padding: getViewPadding(), duration: 1.3 });
+  }
+});
+
+// ====== FILTERING ======
+let currentFilter = 'all';
+
+function filterMarkers(filter) {
+  currentFilter = filter;
+  let count = 0;
+  markers.forEach(m => {
+    const show = filter === 'all'
+      || (filter === 'part1' && m._songData.part === 1)
+      || (filter === 'part2' && m._songData.part === 2);
+    if (show) {
+      m.addTo(map);
+      count++;
+    } else {
+      map.removeLayer(m);
+    }
+  });
+
+  // Show/hide journey lines based on filter
+  if (filter === 'all') {
+    part1Line.addTo(map);
+    part2Line.addTo(map);
+    bridgeLine.addTo(map);
+  } else if (filter === 'part1') {
+    part1Line.addTo(map);
+    map.removeLayer(part2Line);
+    map.removeLayer(bridgeLine);
+  } else {
+    part2Line.addTo(map);
+    map.removeLayer(part1Line);
+    map.removeLayer(bridgeLine);
+  }
+
+  document.getElementById('pin-count').textContent = `${count} stop${count !== 1 ? 's' : ''} visible`;
+}
+
+function flyToFilter(filter) {
+  const widePadding = getViewPadding();
+  // Tight padding for Part II so the Hawaiian archipelago fills the viewport
+  const tightPadding = window.innerWidth < 768 ? [20, 20] : [40, 40];
+
+  if (filter === 'part2') {
+    // Zoom in tight on Hawai'i — fill the window with the four Part II stops
+    map.flyToBounds(part2Bounds, { padding: tightPadding, duration: 1.4, maxZoom: 9 });
+  } else if (filter === 'part1') {
+    // Show ALL stops — Part I needs the full transpacific view to be meaningful
+    map.flyToBounds(allJourneyBounds, { padding: widePadding, duration: 1.4 });
+  } else {
+    // All stops — full journey
+    map.flyToBounds(allJourneyBounds, { padding: widePadding, duration: 1.4 });
+  }
+}
+
+function applyFilter(filter) {
+  if (typeof clearAutoNav === 'function') clearAutoNav();
+  filterMarkers(filter);
+  flyToFilter(filter);
+}
+
+filterMarkers('all');
+
+// ====== LYRICS PANEL ======
+const lyricsPanel = document.getElementById('lyrics-panel');
+const lyricsPanelInner = document.getElementById('lyrics-panel-inner');
+const lyricsToggle = document.getElementById('lyrics-toggle');
+const lyricsClose = document.getElementById('lyrics-close');
+let panelOpen = false;
+
+lyricsToggle.addEventListener('click', () => {
+  if (typeof clearAutoNav === 'function') clearAutoNav();
+  panelOpen = true;
+  lyricsPanel.classList.add('open');
+  lyricsToggle.classList.add('hidden');
+});
+
+lyricsClose.addEventListener('click', () => {
+  panelOpen = false;
+  lyricsPanel.classList.remove('open');
+  lyricsToggle.classList.remove('hidden');
+  lyricsPanelInner.scrollTop = 0;
+});
+
+// Click a verse heading inside the lyrics panel → close panel, fly to that stop, open its popup
+document.querySelectorAll('.lyric-section-clickable').forEach(section => {
+  section.addEventListener('click', () => {
+    const targetOrder = parseInt(section.dataset.stop);
+    if (isNaN(targetOrder)) return;
+    // Close the lyrics panel
+    panelOpen = false;
+    lyricsPanel.classList.remove('open');
+    lyricsToggle.classList.remove('hidden');
+    lyricsPanelInner.scrollTop = 0;
+    // Wait for panel to start collapsing, then fly
+    setTimeout(() => navigateToStop(targetOrder), 450);
+  });
+});
+
+// ====== INTRO ======
+// 5-second auto-navigate timer that ONLY kicks in when the user clicks
+// the "Explore the map" button from the home page. Any manual interaction
+// during the 5s cancels it.
+let autoNavTimer = null;
+function clearAutoNav() {
+  if (autoNavTimer !== null) {
+    clearTimeout(autoNavTimer);
+    autoNavTimer = null;
+  }
+}
+
+document.getElementById('intro-enter').addEventListener('click', () => {
+  document.getElementById('intro-overlay').classList.add('hidden');
+  clearAutoNav();
+  autoNavTimer = setTimeout(() => {
+    autoNavTimer = null;
+    navigateToStop(1);
+  }, 5000);
+});
+
+// --- Scroll-to-dismiss the intro overlay ---
+// On wheel-down or swipe-up, dismiss without firing the auto-nav timer.
+const introOverlay = document.getElementById('intro-overlay');
+let scrollAccumulator = 0;
+let scrollDismissed = false;
+
+function dismissIntroByScroll() {
+  if (scrollDismissed) return;
+  if (introOverlay.classList.contains('hidden')) return;
+  scrollDismissed = true;
+  introOverlay.classList.add('hidden');
+  // Note: scroll-dismissal does NOT start the 5s auto-nav timer
+}
+
+introOverlay.addEventListener('wheel', (e) => {
+  if (introOverlay.classList.contains('hidden')) return;
+  if (e.deltaY <= 0) return; // only respond to downward scrolling
+  // If there's still scrollable content below, let native scroll handle it
+  const canScrollMore = introOverlay.scrollTop + introOverlay.clientHeight < introOverlay.scrollHeight - 1;
+  if (canScrollMore) {
+    scrollAccumulator = 0;
+    return;
+  }
+  scrollAccumulator += e.deltaY;
+  if (scrollAccumulator > 50) {
+    dismissIntroByScroll();
+  }
+}, { passive: true });
+
+// Touch support — swipe up at the bottom of content
+let touchStartY = null;
+introOverlay.addEventListener('touchstart', (e) => {
+  if (introOverlay.classList.contains('hidden')) return;
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
+introOverlay.addEventListener('touchmove', (e) => {
+  if (introOverlay.classList.contains('hidden')) return;
+  if (touchStartY === null) return;
+  const swipeUp = touchStartY - e.touches[0].clientY;
+  if (swipeUp < 70) return;
+  const canScrollMore = introOverlay.scrollTop + introOverlay.clientHeight < introOverlay.scrollHeight - 5;
+  if (canScrollMore) return;
+  dismissIntroByScroll();
+}, { passive: true });
+introOverlay.addEventListener('touchend', () => { touchStartY = null; }, { passive: true });
+
+function triggerHome() {
+  clearAutoNav();
+  panelOpen = false;
+  lyricsPanel.classList.remove('open');
+  lyricsToggle.classList.remove('hidden');
+  lyricsPanelInner.scrollTop = 0;
+  map.closePopup();
+  scrollAccumulator = 0;
+  scrollDismissed = false;
+  introOverlay.scrollTop = 0;
+  introOverlay.classList.remove('hidden');
+}
+
+document.getElementById('title-area').addEventListener('click', triggerHome);
+
+// ====== HAMBURGER MENU ======
+const menuToggle = document.getElementById('menu-toggle');
+const menuPanel = document.getElementById('menu-panel');
+
+function openMenu() {
+  menuPanel.classList.add('open');
+  menuToggle.classList.add('open');
+}
+function closeMenu() {
+  menuPanel.classList.remove('open');
+  menuToggle.classList.remove('open');
+}
+
+menuToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (menuPanel.classList.contains('open')) closeMenu(); else openMenu();
+});
+
+// Outside-click closes the menu
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.menu-wrap')) closeMenu();
+});
+
+// Escape closes the menu
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeMenu();
+});
+
+document.querySelectorAll('.menu-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const action = item.dataset.action;
+    closeMenu();
+    clearAutoNav();
+    switch (action) {
+      case 'filter-all':   applyFilter('all');   break;
+      case 'filter-part1': applyFilter('part1'); break;
+      case 'filter-part2': applyFilter('part2'); break;
+      case 'home':         triggerHome();        break;
+      case 'lyrics':
+        panelOpen = true;
+        lyricsPanel.classList.add('open');
+        lyricsToggle.classList.add('hidden');
+        break;
+    }
+  });
+});
+
+// ====== RESPONSIVE ======
+function fitJourneyToScreen() {
+  const bounds = currentFilter === 'part2' ? part2Bounds : allJourneyBounds;
+  map.fitBounds(bounds, { padding: getViewPadding() });
+}
+
+window.addEventListener('resize', fitJourneyToScreen);
+</script>
+</body>
+</html>
